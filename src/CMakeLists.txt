@@ -15,7 +15,7 @@
 find_package(Protobuf REQUIRED)
 include_directories(${Protobuf_INCLUDE_DIRS})
 
-set(SPM_PROTO_SRCS sentencepiece.pb.cc)
+#set(SPM_PROTO_SRCS sentencepiece.pb.cc)
 set(SPM_PROTO_HDRS sentencepiece.pb.h)
 set(SPM_MODEL_PROTO_SRCS sentencepiece_model.pb.cc)
 set(SPM_MODEL_PROTO_HDRS sentencepiece_model.pb.h)
