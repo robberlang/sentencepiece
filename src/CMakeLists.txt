@@ -14,8 +14,11 @@
 
 find_package(Protobuf REQUIRED)
 include_directories(${Protobuf_INCLUDE_DIRS})
-protobuf_generate_cpp(SPM_PROTO_SRCS SPM_PROTO_HDRS sentencepiece.proto)
-protobuf_generate_cpp(SPM_MODEL_PROTO_SRCS SPM_MODEL_PROTO_HDRS sentencepiece_model.proto)
+
+set(SPM_PROTO_SRCS sentencepiece.pb.cc)
+set(SPM_PROTO_HDRS sentencepiece.pb.h)
+set(SPM_MODEL_PROTO_SRCS sentencepiece_model.pb.cc)
+set(SPM_MODEL_PROTO_HDRS sentencepiece_model.pb.h)
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${PROTOBUF_INCLUDE_DIR})
