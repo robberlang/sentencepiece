@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.!
 
-#include "char_model_trainer.h"
-
 #include <cmath>
 
 #include "char_model.h"
+#include "char_model_trainer.h"
 #include "util.h"
 
 namespace sentencepiece {
@@ -24,8 +23,6 @@ namespace character {
 
 util::Status Trainer::Train() {
   RETURN_IF_ERROR(status());
-
-  LOG(INFO) << "Starts training with : \n" << trainer_spec_.Utf8DebugString();
 
   CHECK_OR_RETURN(normalizer_spec_.escape_whitespaces());
   CHECK_EQ_OR_RETURN(TrainerSpec::CHAR, trainer_spec_.model_type());
@@ -40,7 +37,7 @@ util::Status Trainer::Train() {
     sum += it.second;
   }
 
-  const float logsum = log(sum);
+  const auto logsum = std::log(static_cast<float>(sum));
 
   CHECK_OR_RETURN(final_pieces_.empty());
   for (const auto &it : Sorted(required_chars_)) {
@@ -48,15 +45,14 @@ util::Status Trainer::Train() {
         final_pieces_.size() == static_cast<size_t>(vocab_size)) {
       break;
     }
-    final_pieces_.emplace_back(string_util::UnicodeCharToUTF8(it.first),
-                               log(it.second) - logsum);
+    final_pieces_.emplace_back(
+        string_util::UnicodeCharToUTF8(it.first),
+        std::log(static_cast<float>(it.second)) - logsum);
   }
 
   if (trainer_spec_.use_all_vocab()) {
     trainer_spec_.set_vocab_size(final_pieces_.size() + meta_pieces_.size());
   }
-
-  LOG(INFO) << trainer_spec_.Utf8DebugString();
 
   return Save();
 }

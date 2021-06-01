@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.!
 
-#include "model_interface.h"
 #include "model_factory.h"
+#include "model_interface.h"
 #include "testharness.h"
+#include "third_party/absl/container/flat_hash_map.h"
 #include "util.h"
 
 namespace sentencepiece {
@@ -26,12 +27,14 @@ const std::vector<TrainerSpec::ModelType> kModelTypes = {
     TrainerSpec::UNIGRAM, TrainerSpec::BPE, TrainerSpec::WORD,
     TrainerSpec::CHAR};
 
-ModelProto MakeBaseModelProto(TrainerSpec::ModelType type) {
+ModelProto MakeBaseModelProto(TrainerSpec::ModelType type,
+                              bool byte_fallback = false) {
   ModelProto model_proto;
   auto *sp1 = model_proto.add_pieces();
   auto *sp2 = model_proto.add_pieces();
   auto *sp3 = model_proto.add_pieces();
   model_proto.mutable_trainer_spec()->set_model_type(type);
+  model_proto.mutable_trainer_spec()->set_byte_fallback(byte_fallback);
 
   sp1->set_type(ModelProto::SentencePiece::UNKNOWN);
   sp1->set_piece("<unk>");
@@ -48,6 +51,60 @@ void AddPiece(ModelProto *model_proto, const std::string &piece,
   auto *sp = model_proto->add_pieces();
   sp->set_piece(piece);
   sp->set_score(score);
+}
+
+void AddBytePiece(ModelProto *model_proto, unsigned char byte) {
+  auto *sp = model_proto->add_pieces();
+  sp->set_piece(ByteToPiece(byte));
+  sp->set_type(ModelProto::SentencePiece::BYTE);
+}
+
+TEST(ModelInterfaceTest, GetDefaultPieceTest) {
+  {
+    ModelProto model_proto;
+    EXPECT_EQ("<unk>", model_proto.trainer_spec().unk_piece());
+    EXPECT_EQ("<s>", model_proto.trainer_spec().bos_piece());
+    EXPECT_EQ("</s>", model_proto.trainer_spec().eos_piece());
+    EXPECT_EQ("<pad>", model_proto.trainer_spec().pad_piece());
+  }
+
+  {
+    ModelProto model_proto = MakeBaseModelProto(TrainerSpec::UNIGRAM);
+    AddPiece(&model_proto, "a");
+    auto model = ModelFactory::Create(model_proto);
+    EXPECT_EQ("<unk>", model->unk_piece());
+    EXPECT_EQ("<s>", model->bos_piece());
+    EXPECT_EQ("</s>", model->eos_piece());
+    EXPECT_EQ("<pad>", model->pad_piece());
+  }
+
+  {
+    ModelProto model_proto = MakeBaseModelProto(TrainerSpec::UNIGRAM);
+    AddPiece(&model_proto, "a");
+    model_proto.mutable_trainer_spec()->clear_unk_piece();
+    model_proto.mutable_trainer_spec()->clear_bos_piece();
+    model_proto.mutable_trainer_spec()->clear_eos_piece();
+    model_proto.mutable_trainer_spec()->clear_pad_piece();
+    auto model = ModelFactory::Create(model_proto);
+    EXPECT_EQ("<unk>", model->unk_piece());
+    EXPECT_EQ("<s>", model->bos_piece());
+    EXPECT_EQ("</s>", model->eos_piece());
+    EXPECT_EQ("<pad>", model->pad_piece());
+  }
+
+  {
+    ModelProto model_proto = MakeBaseModelProto(TrainerSpec::UNIGRAM);
+    AddPiece(&model_proto, "a");
+    model_proto.mutable_trainer_spec()->set_unk_piece("UNK");
+    model_proto.mutable_trainer_spec()->set_bos_piece("BOS");
+    model_proto.mutable_trainer_spec()->set_eos_piece("EOS");
+    model_proto.mutable_trainer_spec()->set_pad_piece("PAD");
+    auto model = ModelFactory::Create(model_proto);
+    EXPECT_EQ("UNK", model->unk_piece());
+    EXPECT_EQ("BOS", model->bos_piece());
+    EXPECT_EQ("EOS", model->eos_piece());
+    EXPECT_EQ("PAD", model->pad_piece());
+  }
 }
 
 TEST(ModelInterfaceTest, SetModelInterfaceTest) {
@@ -184,6 +241,40 @@ TEST(ModelInterfaceTest, InvalidModelTest) {
   }
 }
 
+TEST(ModelInterfaceTest, ByteFallbackModelTest) {
+  {
+    ModelProto model_proto = MakeBaseModelProto(TrainerSpec::UNIGRAM, true);
+    for (int i = 0; i < 256; ++i) {
+      AddBytePiece(&model_proto, i);
+    }
+    AddPiece(&model_proto, "a");
+    auto model = ModelFactory::Create(model_proto);
+    EXPECT_TRUE(model->status().ok());
+  }
+
+  // `byte_fallback` is true, but there are not 256 byte pieces.
+  {
+    ModelProto model_proto = MakeBaseModelProto(TrainerSpec::UNIGRAM, true);
+    for (int i = 0; i < 10; ++i) {
+      AddBytePiece(&model_proto, i);
+    }
+    AddPiece(&model_proto, "a");
+    auto model = ModelFactory::Create(model_proto);
+    EXPECT_FALSE(model->status().ok());
+  }
+
+  // `byte_fallback` is false, but a byte piece is found.
+  {
+    ModelProto model_proto = MakeBaseModelProto(TrainerSpec::UNIGRAM);
+    for (int i = 0; i < 10; ++i) {
+      AddBytePiece(&model_proto, i);
+    }
+    AddPiece(&model_proto, "a");
+    auto model = ModelFactory::Create(model_proto);
+    EXPECT_FALSE(model->status().ok());
+  }
+}
+
 std::string RandomString(int length) {
   const char kAlphaNum[] =
       "0123456789"
@@ -202,8 +293,8 @@ std::string RandomString(int length) {
 TEST(ModelInterfaceTest, PieceToIdStressTest) {
   for (const auto type : kModelTypes) {
     for (int i = 0; i < 100; ++i) {
-      std::unordered_map<std::string, int> expected_p2i;
-      std::unordered_map<int, std::string> expected_i2p;
+      absl::flat_hash_map<std::string, int> expected_p2i;
+      absl::flat_hash_map<int, std::string> expected_i2p;
       ModelProto model_proto = MakeBaseModelProto(type);
       for (int n = 0; n < 1000; ++n) {
         const std::string piece = RandomString(10);
@@ -262,6 +353,119 @@ TEST(ModelInterfaceTest, SplitIntoWordsTest) {
     const auto v = SplitIntoWords("hello");
     EXPECT_EQ(1, v.size());
     EXPECT_EQ("hello", v[0]);
+  }
+}
+
+TEST(ModelInterfaceTest, SplitIntoWordsSuffixTest) {
+  {
+    const auto v = SplitIntoWords("this" WS "is" WS "a" WS "pen" WS, true);
+    EXPECT_EQ(4, v.size());
+    EXPECT_EQ("this" WS, v[0]);
+    EXPECT_EQ("is" WS, v[1]);
+    EXPECT_EQ("a" WS, v[2]);
+    EXPECT_EQ("pen" WS, v[3]);
+  }
+
+  {
+    const auto v = SplitIntoWords("this" WS "is" WS "a" WS "pen", true);
+    EXPECT_EQ(4, v.size());
+    EXPECT_EQ("this" WS, v[0]);
+    EXPECT_EQ("is" WS, v[1]);
+    EXPECT_EQ("a" WS, v[2]);
+    EXPECT_EQ("pen", v[3]);
+  }
+
+  {
+    const auto v = SplitIntoWords(WS "this" WS WS "is", true);
+    EXPECT_EQ(4, v.size());
+    EXPECT_EQ(WS, v[0]);
+    EXPECT_EQ("this" WS, v[1]);
+    EXPECT_EQ(WS, v[2]);
+    EXPECT_EQ("is", v[3]);
+  }
+
+  {
+    const auto v = SplitIntoWords("", true);
+    EXPECT_TRUE(v.empty());
+  }
+
+  {
+    const auto v = SplitIntoWords("hello", true);
+    EXPECT_EQ(1, v.size());
+    EXPECT_EQ("hello", v[0]);
+  }
+
+  {
+    const auto v = SplitIntoWords("hello" WS WS, true);
+    EXPECT_EQ(2, v.size());
+    EXPECT_EQ("hello" WS, v[0]);
+    EXPECT_EQ(WS, v[1]);
+  }
+
+  {
+    const auto v = SplitIntoWords(WS WS "hello" WS WS, true);
+    EXPECT_EQ(4, v.size());
+    EXPECT_EQ(WS, v[0]);
+    EXPECT_EQ(WS, v[1]);
+    EXPECT_EQ("hello" WS, v[2]);
+    EXPECT_EQ(WS, v[3]);
+  }
+}
+
+TEST(ModelInterfaceTest, ByteToPieceTest) {
+  EXPECT_EQ(ByteToPiece(0), "<0x00>");
+  EXPECT_EQ(ByteToPiece(1), "<0x01>");
+  EXPECT_EQ(ByteToPiece(10), "<0x0A>");
+  EXPECT_EQ(ByteToPiece(16), "<0x10>");
+  EXPECT_EQ(ByteToPiece(255), "<0xFF>");
+}
+
+TEST(ModelInterfaceTest, PieceToByteTest) {
+  // Valid byte pieces.
+  EXPECT_EQ(PieceToByte("<0x00>"), 0);
+  EXPECT_EQ(PieceToByte("<0x01>"), 1);
+  EXPECT_EQ(PieceToByte("<0x0A>"), 10);
+  EXPECT_EQ(PieceToByte("<0x10>"), 16);
+  EXPECT_EQ(PieceToByte("<0xFF>"), 255);
+
+  // Invalid byte pieces.
+  EXPECT_EQ(PieceToByte("<0x0>"), -1);
+  EXPECT_EQ(PieceToByte("<0x000>"), -1);
+  EXPECT_EQ(PieceToByte("<0x001>"), -1);
+  EXPECT_EQ(PieceToByte("<0xff>"), -1);
+  EXPECT_EQ(PieceToByte("<0xFG>"), -1);
+  EXPECT_EQ(PieceToByte("a"), -1);
+}
+
+TEST(ModelInterfaceTest, SetEncoderVersion) {
+  for (const auto type : kModelTypes) {
+    ModelProto model_proto = MakeBaseModelProto(type);
+    AddPiece(&model_proto, "a");
+    AddPiece(&model_proto, "b");
+    auto model = ModelFactory::Create(model_proto);
+
+    // Verify the default encoder version.
+    EXPECT_EQ(EncoderVersion::kOptimized, model->GetEncoderVersion());
+
+    // Set the encoder version to original and verify.
+    EXPECT_TRUE(model->SetEncoderVersion(EncoderVersion::kOriginal).ok());
+    EXPECT_EQ(EncoderVersion::kOriginal, model->GetEncoderVersion());
+  }
+}
+
+TEST(ModelInterfaceTest, VerifyOutputsEquivalent) {
+  for (const auto type : kModelTypes) {
+    ModelProto model_proto = MakeBaseModelProto(type);
+    AddPiece(&model_proto, "a", 1.0);
+    AddPiece(&model_proto, "b", 2.0);
+    auto model = ModelFactory::Create(model_proto);
+
+    // Equivalent outputs.
+    EXPECT_TRUE(model->VerifyOutputsEquivalent("", ""));
+    EXPECT_TRUE(model->VerifyOutputsEquivalent("a b", "a b"));
+
+    // Inequivalent outputs.
+    EXPECT_FALSE(model->VerifyOutputsEquivalent("a", "a b"));
   }
 }
 

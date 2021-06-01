@@ -15,9 +15,10 @@
 #ifndef COMMON_H_
 #define COMMON_H_
 
-#include <setjmp.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
+
 #include <iostream>
 #include <memory>
 #include <string>
@@ -25,7 +26,7 @@
 #include <vector>
 
 #include "config.h"
-#include "flags.h"
+#include "third_party/absl/flags/flag.h"
 
 #if defined(_WIN32) && !defined(__CYGWIN__)
 #define OS_WIN
@@ -89,11 +90,6 @@ std::string WideToUtf8(const std::wstring &input);
 }  // namespace win32
 #endif
 
-namespace flags {
-int GetMinLogLevel();
-void SetMinLogLevel(int minloglevel);
-}  // namespace flags
-
 namespace error {
 
 void Abort();
@@ -135,24 +131,38 @@ enum LogSeverity {
   LOG_FATAL = 3,
   LOG_SEVERITY_SIZE = 4,
 };
+
+inline const char *BaseName(const char *path) {
+#ifdef OS_WIN
+  const char *p = strrchr(path, '\\');
+#else
+  const char *p = strrchr(path, '/');
+#endif
+  if (p == nullptr) return path;
+  return p + 1;
+}
 }  // namespace logging
 }  // namespace sentencepiece
 
-#define LOG(severity)                                        \
-  (sentencepiece::flags::GetMinLogLevel() >                  \
-   ::sentencepiece::logging::LOG_##severity)                 \
-      ? 0                                                    \
-      : ::sentencepiece::error::Die(                         \
-            ::sentencepiece::logging::LOG_##severity >=      \
-            ::sentencepiece::logging::LOG_FATAL) &           \
-            std::cerr << __FILE__ << "(" << __LINE__ << ") " \
+ABSL_DECLARE_FLAG(int32, minloglevel);
+
+#define LOG(severity)                                                        \
+  (absl::GetFlag(FLAGS_minloglevel) >                                        \
+   ::sentencepiece::logging::LOG_##severity)                                 \
+      ? 0                                                                    \
+      : ::sentencepiece::error::Die(                                         \
+            ::sentencepiece::logging::LOG_##severity >=                      \
+            ::sentencepiece::logging::LOG_FATAL) &                           \
+            std::cerr << ::sentencepiece::logging::BaseName(__FILE__) << "(" \
+                      << __LINE__ << ") "                                    \
                       << "LOG(" << #severity << ") "
 
-#define CHECK(condition)                                              \
-  (condition) ? 0                                                     \
-              : ::sentencepiece::error::Die(true) &                   \
-                    std::cerr << __FILE__ << "(" << __LINE__ << ") [" \
-                              << #condition << "] "
+#define CHECK(condition)                                                      \
+  (condition) ? 0                                                             \
+              : ::sentencepiece::error::Die(true) &                           \
+                    std::cerr << ::sentencepiece::logging::BaseName(__FILE__) \
+                              << "(" << __LINE__ << ") [" << #condition       \
+                              << "] "
 
 #define CHECK_STREQ(a, b) CHECK_EQ(std::string(a), std::string(b))
 #define CHECK_EQ(a, b) CHECK((a) == (b))
@@ -161,9 +171,10 @@ enum LogSeverity {
 #define CHECK_LE(a, b) CHECK((a) <= (b))
 #define CHECK_GT(a, b) CHECK((a) > (b))
 #define CHECK_LT(a, b) CHECK((a) < (b))
-#define CHECK_NOTNULL(val)                                 \
-  ::sentencepiece::error::CheckNotNull(__FILE__, __LINE__, \
-                                       "'" #val "' Must be non NULL", (val))
+#define CHECK_NOTNULL(val)                                    \
+  ::sentencepiece::error::CheckNotNull(                       \
+      ::sentencepiece::logging::BaseName(__FILE__), __LINE__, \
+      "'" #val "' Must be non NULL", (val))
 
 #define FRIEND_TEST(a, b) friend class a##_Test_##b;
 

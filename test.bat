@@ -1,4 +1,3 @@
-set PROTOBUF_VERSION=3.6.1
 set PLATFORM=%1
 if "%PLATFORM%"=="" set PLATFORM=x64
 set PLATFORM_PREFIX=
@@ -11,13 +10,6 @@ set LIBRARY_PATH=%CURRENT_PATH%build\root
 mkdir build
 cd build
 
-curl -O -L https://github.com/google/protobuf/releases/download/v%PROTOBUF_VERSION%/protobuf-cpp-%PROTOBUF_VERSION%.zip
-unzip protobuf-cpp-%PROTOBUF_VERSION%.zip
-cd protobuf-%PROTOBUF_VERSION%\cmake
-cmake . -A %PLATFORM% -DCMAKE_INSTALL_PREFIX=%LIBRARY_PATH% || goto :error
-cmake --build . --config Release --target install || goto :error
-
-cd ..\..
 cmake .. -A %PLATFORM% -DSPM_BUILD_TEST=ON -DSPM_ENABLE_SHARED=OFF -DCMAKE_INSTALL_PREFIX=%LIBRARY_PATH%
 cmake --build . --config Release --target install || goto :error
 ctest -C Release || goto :error
@@ -28,7 +20,9 @@ rem call :BuildPython C:\Python27%PLATFORM_PREFIX%
 call :BuildPython C:\Python35%PLATFORM_PREFIX%
 call :BuildPython C:\Python36%PLATFORM_PREFIX%
 call :BuildPython C:\Python37%PLATFORM_PREFIX%
-c:\Python37%PLATFORM_PREFIX%\python setup.py sdist || goto :error
+call :BuildPython C:\Python38%PLATFORM_PREFIX%
+call :BuildPython C:\Python39%PLATFORM_PREFIX%
+c:\Python38%PLATFORM_PREFIX%\python setup.py sdist || goto :error
 exit
 
 :BuildPython

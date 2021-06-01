@@ -12,15 +12,62 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.!
 
-find_package(Protobuf REQUIRED)
-include_directories(${Protobuf_INCLUDE_DIRS})
-protobuf_generate_cpp(SPM_PROTO_SRCS SPM_PROTO_HDRS sentencepiece.proto)
-protobuf_generate_cpp(SPM_MODEL_PROTO_SRCS SPM_MODEL_PROTO_HDRS sentencepiece_model.proto)
+if (SPM_USE_BUILTIN_PROTOBUF)
+  set(SPM_PROTO_HDRS builtin_pb/sentencepiece.pb.h)
+  set(SPM_PROTO_SRCS builtin_pb/sentencepiece.pb.cc)
+  set(SPM_MODEL_PROTO_HDRS builtin_pb/sentencepiece_model.pb.h)
+  set(SPM_MODEL_PROTO_SRCS builtin_pb/sentencepiece_model.pb.cc)
+  set(PROTOBUF_LITE_LIBRARY "")
+  set(PROTOBUF_LITE_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/arena.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/arenastring.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/bytestream.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/coded_stream.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/common.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/extension_set.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/generated_message_table_driven_lite.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/generated_message_util.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/implicit_weak_message.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/int128.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/io_win32.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/message_lite.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/repeated_field.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/status.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/statusor.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/stringpiece.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/stringprintf.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/structurally_valid.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/strutil.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/time.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/wire_format_lite.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/zero_copy_stream.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite/zero_copy_stream_impl_lite.cc)
+  if (MSVC)
+    add_definitions("/DHAVE_PTHREAD /wd4018 /wd4514")
+  else()
+    add_definitions("-pthread -DHAVE_PTHREAD=1 -Wno-sign-compare")
+  endif()
+  include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../third_party/protobuf-lite)
+  include_directories(builtin_pb)
+else()
+  find_package(Protobuf REQUIRED)
+  include_directories(${Protobuf_INCLUDE_DIRS})
+  protobuf_generate_cpp(SPM_PROTO_SRCS SPM_PROTO_HDRS sentencepiece.proto)
+  protobuf_generate_cpp(SPM_MODEL_PROTO_SRCS SPM_MODEL_PROTO_HDRS sentencepiece_model.proto)
+  set(PROTOBUF_LITE_SRCS "")
+  include_directories(${PROTOBUF_INCLUDE_DIR})
+endif()
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
-include_directories(${PROTOBUF_INCLUDE_DIR})
+
+if (MSVC)
+  add_definitions("/D_USE_INTERNAL_STRING_VIEW")
+else()
+  add_definitions("-D_USE_INTERNAL_STRING_VIEW")
+endif()
 
 set(SPM_SRCS
+  ${PROTOBUF_LITE_SRCS}
   ${SPM_PROTO_HDRS}
   ${SPM_PROTO_SRCS}
   ${SPM_MODEL_PROTO_HDRS}
@@ -31,7 +78,7 @@ set(SPM_SRCS
   util.h
   freelist.h
   filesystem.h
-  flags.h
+  init.h
   sentencepiece_processor.h
   word_model.h
   model_factory.h
@@ -43,7 +90,7 @@ set(SPM_SRCS
   char_model.cc
   error.cc
   filesystem.cc
-  flags.cc
+  init.cc
   model_factory.cc
   model_interface.cc
   normalizer.cc
@@ -51,7 +98,8 @@ set(SPM_SRCS
   unigram_model.cc
   util.cc
   word_model.cc
-  ../third_party/absl/strings/string_view.cc)
+  ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/absl/strings/string_view.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/absl/flags/flag.cc)
 
 set(SPM_TRAIN_SRCS
   ${SPM_PROTO_HDRS}
@@ -67,6 +115,7 @@ set(SPM_TRAIN_SRCS
   char_model_trainer.h
   bpe_model_trainer.h
   sentencepiece_trainer.h
+  pretokenizer_for_training.h
   builder.cc
   unicode_script.cc
   trainer_factory.cc
@@ -75,7 +124,8 @@ set(SPM_TRAIN_SRCS
   word_model_trainer.cc
   char_model_trainer.cc
   bpe_model_trainer.cc
-  sentencepiece_trainer.cc)
+  sentencepiece_trainer.cc
+  pretokenizer_for_training.cc)
 
 set(SPM_TEST_SRCS
   ${SPM_PROTO_HDRS}
@@ -87,7 +137,7 @@ set(SPM_TEST_SRCS
   char_model_test.cc
   char_model_trainer_test.cc
   filesystem_test.cc
-  flags_test.cc
+  init_test.cc
   model_factory_test.cc
   model_interface_test.cc
   normalizer_test.cc
@@ -102,11 +152,12 @@ set(SPM_TEST_SRCS
   unigram_model_trainer_test.cc
   util_test.cc
   word_model_test.cc
-  word_model_trainer_test.cc)
+  word_model_trainer_test.cc
+  pretokenizer_for_training_test.cc)
 
 find_package(Threads REQUIRED)
 
-set(SPM_LIBS ${PROTOBUF_LIBRARY} Threads::Threads)
+set(SPM_LIBS ${PROTOBUF_LITE_LIBRARY} Threads::Threads)
 
 if (SPM_ENABLE_NFKC_COMPILE)
   find_package(ICU 4.4 COMPONENTS i18n data uc REQUIRED)
@@ -144,6 +195,13 @@ target_link_libraries(sentencepiece_train-static INTERFACE sentencepiece-static 
 if (SPM_ENABLE_SHARED)
   target_link_libraries(sentencepiece ${SPM_LIBS})
   target_link_libraries(sentencepiece_train ${SPM_LIBS} sentencepiece)
+  if ((${CMAKE_SYSTEM_PROCESSOR} STREQUAL "armv7l") OR
+      (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "mips") OR
+      (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "m68k") OR
+      (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "ppc") OR
+      (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "sh4"))
+    list(APPEND SPM_LIBS "atomic")
+  endif()
   set(SPM_INSTALLTARGETS sentencepiece sentencepiece_train sentencepiece-static sentencepiece_train-static)
   set_target_properties(sentencepiece sentencepiece_train PROPERTIES SOVERSION 0 VERSION 0.0.0)
   set_target_properties(sentencepiece PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS YES)
@@ -175,6 +233,7 @@ if (NOT MSVC)
   endif()
   if (SPM_NO_THREADLOCAL)
     add_definitions(-DSPM_NO_THREADLOCAL=1)
+    add_definitions(-DGOOGLE_PROTOBUF_NO_THREADLOCAL=1)
   endif()
   set_source_files_properties(
     sentencepiece.pb.cc sentencepiece_model.pb.cc
@@ -231,13 +290,13 @@ if (SPM_BUILD_TEST OR SPM_COVERAGE)
   include(Dart)
 
   add_test(NAME sentencepiece_test
-    COMMAND $<TARGET_FILE:spm_test> --data_dir=${data_dir})
+    COMMAND $<TARGET_FILE:spm_test> --test_srcdir=${data_dir})
 endif()
 
 if (SPM_COVERAGE)
   add_custom_target(coverage
     COMMAND mkdir -p coverage
-    COMMAND $<TARGET_FILE:spm_test> --data_dir=${data_dir}
+    COMMAND $<TARGET_FILE:spm_test> --test_srcdir=${data_dir}
     COMMAND lcov -c -d . -o coverage.info
     COMMAND lcov --remove coverage.info "include*" "/c++" "_test*" "testharness*" "third_party*" ".pb.*" -o coverage.info
     COMMAND mkdir -p lcov_html

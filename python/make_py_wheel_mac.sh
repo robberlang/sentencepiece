@@ -16,8 +16,6 @@
 set -e  # exit immediately on error
 set -x  # display all commands
 
-PROTOBUF_VERSION=3.6.1
-
 build_python() {
   VERSION=$1
   URL=$2
@@ -61,16 +59,6 @@ build() {
   mkdir -p build
   cd build
 
-  # Install protobuf
-  curl -L -O https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/protobuf-cpp-${PROTOBUF_VERSION}.tar.gz
-  tar zxfv protobuf-cpp-${PROTOBUF_VERSION}.tar.gz
-  cd protobuf-${PROTOBUF_VERSION}
-  ./configure --disable-shared --with-pic
-  make CXXFLAGS+="-std=c++11 -O3 -DGOOGLE_PROTOBUF_NO_THREADLOCAL=1" \
-    CFLAGS+="-std=c++11 -O3 -DGOOGLE_PROTOBUF_NO_THREADLOCAL=1" -j4
-  make install || true
-  cd ..
-
   # Install sentencepiece
   cmake ../.. -DSPM_ENABLE_SHARED=OFF -DSPM_NO_THREADLOCAL=ON
   make -j4 VERBOSE=1
@@ -80,11 +68,14 @@ build() {
   mkdir -p dist/delocated_wheel
   curl -L -O https://bootstrap.pypa.io/get-pip.py
 
-  build_python 2.7 https://www.python.org/ftp/python/2.7.15/python-2.7.15-macosx10.6.pkg
-  build_python 3.4 https://www.python.org/ftp/python/3.4.4/python-3.4.4-macosx10.6.pkg
+#  build_python 2.7 https://www.python.org/ftp/python/2.7.15/python-2.7.15-macosx10.6.pkg
+# latest pip doesn't support Py3.4
+# build_python 3.4 https://www.python.org/ftp/python/3.4.4/python-3.4.4-macosx10.6.pkg
   build_python 3.5 https://www.python.org/ftp/python/3.5.4/python-3.5.4-macosx10.6.pkg
   build_python 3.6 https://www.python.org/ftp/python/3.6.6/python-3.6.6-macosx10.6.pkg
-  build_python 3.7 https://www.python.org/ftp/python/3.7.0/python-3.7.0-macosx10.6.pkg
+  build_python 3.7 https://www.python.org/ftp/python/3.7.9/python-3.7.9-macosx10.9.pkg
+  build_python 3.8 https://www.python.org/ftp/python/3.8.6/python-3.8.6-macosx10.9.pkg
+  build_python 3.9 https://www.python.org/ftp/python/3.9.0/python-3.9.0-macosx10.9.pkg
 
   cd ..
 

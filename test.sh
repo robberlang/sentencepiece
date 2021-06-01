@@ -18,9 +18,12 @@ set -e  # exit immediately on error
 set -x  # display all commands
 
 setup_ubuntu() {
+  export DEBIAN_FRONTEND=noninteractive
   apt-get update
-  apt-get install -y build-essential cmake git \
-    pkg-config libprotobuf-c++ protobuf-compiler libprotobuf-dev python-pip python3-pip
+  apt-get install -y build-essential cmake git pkg-config python3-pip
+  pip3 install --upgrade pip
+
+  export PATH="/usr/local/bin:$PATH"
 
   . /etc/os-release
   if [ "${VERSION_ID}" = "14.04" ]; then
@@ -34,7 +37,7 @@ setup_debian() {
 
 setup_fedora() {
   dnf update -y
-  dnf install -y rpm-build gcc-c++ make protobuf-devel cmake pkg-config python-pip python-devel
+  dnf install -y rpm-build gcc-c++ make cmake pkg-config python-pip python-devel
 }
 
 build_generic() {
@@ -42,7 +45,7 @@ build_generic() {
   cd build
   cmake .. -DSPM_BUILD_TEST=ON
   make -j2
-  make test
+  make CTEST_OUTPUT_ON_FAILURE=1 test
   make package_source
   cd ..
 }
@@ -51,31 +54,21 @@ build_python() {
   cd build
   make install
   cd ..
-  export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-  export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
+  export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64:$LD_LIBRARY_PATH
+  export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig
   ldconfig -v
   cd python
-  python setup.py test
-  cd ..
-}
-
-build_tensorflow() {
-  cd tensorflow
-  pip install tensorflow
-  python setup.py bdist_wheel
-  python setup.py sdist
-  python setup.py test
+  python3 setup.py test
   cd ..
 }
 
 build_linux_gcc_coverall_ubuntu() {
   setup_debian
   apt-get install -y lcov
-  pip install cpp-coveralls
-  pip install 'requests[security]'
+  pip3 install cpp-coveralls
+  pip3 install 'requests[security]'
   build_generic
   build_python
-  build_tensorflow
   mkdir -p build
   cd build
   cmake .. -DSPM_COVERAGE=ON
@@ -86,13 +79,6 @@ build_linux_gcc_coverall_ubuntu() {
 }
 
 build_linux_gcc_ubuntu() {
-  setup_ubuntu
-  build_generic
-  build_python
-  build_tensorflow
-}
-
-build_linux_gcc_ubuntu_trusty() {
   setup_ubuntu
   build_generic
   build_python
@@ -108,25 +94,20 @@ build_linux_gcc_debian() {
   setup_debian
   build_generic
   build_python
-  build_tensorflow
 }
 
 build_linux_gcc_fedora() {
   setup_fedora
   build_generic
   build_python
-  build_tensorflow
 }
 
 build_linux_clang_ubuntu() {
   setup_ubuntu
-#  for v in 3.9 4.0 5.0 6.0; do
-  for v in 3.9 6.0; do
-    apt-get install -y clang-${v}
-    export CXX="clang++-${v}" CC="clang-${v}"
-    build_generic
-    rm -fr build
-   done
+  apt-get install -y clang
+  export CXX="clang++" CC="clang"
+  build_generic
+  rm -fr build
 }
 
 build_osx() {
@@ -138,16 +119,10 @@ build_osx() {
   make install
   cd ..
   cd python
-  # Test default Python
   python setup.py test
   python setup.py clean
-  # Test Python2
   /usr/local/bin/python setup.py test
   /usr/local/bin/python setup.py clean
-  # Upgrade to Python3
-  brew upgrade python || true
-  /usr/local/bin/python3 setup.py test
-  /usr/local/bin/python3 setup.py clean
   cd ..
 }
 

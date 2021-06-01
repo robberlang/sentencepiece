@@ -14,6 +14,9 @@
 
 syntax = "proto2";
 
+// TODO(taku): Needs to use LITE RUNTIME in OSS release.
+option optimize_for = LITE_RUNTIME;
+
 package sentencepiece;
 
 // SentencePieceText manages a user-facing source sentence,
