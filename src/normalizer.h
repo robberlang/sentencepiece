@@ -88,7 +88,9 @@ class Normalizer {
   // - Removing heading, tailing and other redundant spaces.
   virtual util::Status Normalize(absl::string_view input,
                                  std::string *normalized,
-                                 std::vector<size_t> *norm_to_orig) const;
+                                 std::vector<size_t> *norm_to_orig,
+                                 normalizer::AddDummyPrefix add_dummy_prefix
+                                 = normalizer::AddDummyPrefix::DEFAULT) const;
 
   // Returns a normalized string without alignments.
   // This function is used in sentencepiece training.
