@@ -220,12 +220,13 @@ util::Status SentencePieceProcessor::LoadVocabulary(absl::string_view filename,
 
 //////////////////////////////////////////////////////////////
 // Simple API.
-util::Status SentencePieceProcessor::Encode(
-    absl::string_view input, std::vector<std::string> *pieces) const {
+util::Status SentencePieceProcessor::Encode(absl::string_view input,
+                                            std::vector<std::string> *pieces,
+                                            normalizer::AddDummyPrefix add_dummy_prefix) const {
   CHECK_OR_RETURN_STATUS_STL(pieces);
 
   SentencePieceText spt;
-  RETURN_IF_ERROR(Encode(input, &spt));
+  RETURN_IF_ERROR(Encode(input, &spt, add_dummy_prefix));
   for (const auto &sp : spt.pieces()) {
     pieces->emplace_back(sp.piece());
   }
@@ -234,11 +235,12 @@ util::Status SentencePieceProcessor::Encode(
 }
 
 util::Status SentencePieceProcessor::Encode(absl::string_view input,
-                                            std::vector<int> *ids) const {
+                                            std::vector<int> *ids,
+                                            normalizer::AddDummyPrefix add_dummy_prefix) const {
   CHECK_OR_RETURN_STATUS_STL(ids);
 
   SentencePieceText spt;
-  RETURN_IF_ERROR(Encode(input, &spt));
+  RETURN_IF_ERROR(Encode(input, &spt, add_dummy_prefix));
   for (const auto &sp : spt.pieces()) {
     ids->emplace_back(sp.id());
   }
@@ -424,12 +426,14 @@ util::Status SentencePieceProcessor::PopulateSentencePieceText(
 }  // namespace sentencepiece
 
 util::Status SentencePieceProcessor::Encode(absl::string_view input,
-                                            SentencePieceText *spt) const {
+                                            SentencePieceText *spt,
+                                            normalizer::AddDummyPrefix add_dummy_prefix) const {
   CHECK_OR_RETURN_STATUS_PROTO(spt);
 
   std::string normalized;
   std::vector<size_t> norm_to_orig;
-  RETURN_IF_ERROR(normalizer_->Normalize(input, &normalized, &norm_to_orig));
+  RETURN_IF_ERROR(normalizer_->Normalize(
+      input, &normalized, &norm_to_orig, add_dummy_prefix));
 
   const auto result = model_->Encode(normalized);
   RETURN_IF_ERROR(

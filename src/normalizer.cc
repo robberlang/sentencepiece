@@ -73,7 +73,8 @@ void Normalizer::Init() {
 
 util::Status Normalizer::Normalize(absl::string_view input,
                                    std::string *normalized,
-                                   std::vector<size_t> *norm_to_orig) const {
+                                   std::vector<size_t> *norm_to_orig,
+                                   normalizer::AddDummyPrefix add_dummy_prefix) const {
   norm_to_orig->clear();
   normalized->clear();
 
@@ -128,7 +129,8 @@ util::Status Normalizer::Normalize(absl::string_view input,
   // With this prefix, "world" and "hello world" are converted into
   // "_world" and "_hello_world", which help the trainer to extract
   // "_world" as one symbol.
-  if (!treat_whitespace_as_suffix_ && spec_->add_dummy_prefix()) add_ws();
+  if(!treat_whitespace_as_suffix_ && (add_dummy_prefix == normalizer::AddDummyPrefix::ON
+     || (add_dummy_prefix != normalizer::AddDummyPrefix::OFF && spec_->add_dummy_prefix()))) add_ws();
 
   bool is_prev_space = spec_->remove_extra_whitespaces();
   while (!input.empty()) {
@@ -179,7 +181,8 @@ util::Status Normalizer::Normalize(absl::string_view input,
   }
 
   // Adds a space symbol as a suffix (default is false)
-  if (treat_whitespace_as_suffix_ && spec_->add_dummy_prefix()) add_ws();
+  if(treat_whitespace_as_suffix_ && (add_dummy_prefix == normalizer::AddDummyPrefix::ON
+     || (add_dummy_prefix != normalizer::AddDummyPrefix::OFF && spec_->add_dummy_prefix()))) add_ws();
 
   norm_to_orig->push_back(consumed);
 

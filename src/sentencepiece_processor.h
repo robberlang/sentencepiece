@@ -161,6 +161,11 @@ class ModelProto;
 
 namespace normalizer {
 class Normalizer;
+enum AddDummyPrefix {
+  DEFAULT = 0,
+  OFF = 1,
+  ON = 2,
+};
 }  // namespace normalizer
 
 // Defines the multiple versions of encoder within each model. Currently only
@@ -236,11 +241,15 @@ class SentencePieceProcessor {
   //
   // Given a UTF8 input, encodes it into a sequence of sentence pieces.
   virtual util::Status Encode(absl::string_view input,
-                              std::vector<std::string> *pieces) const;
+                              std::vector<std::string> *pieces,
+                              normalizer::AddDummyPrefix add_dummy_prefix
+                              = normalizer::AddDummyPrefix::DEFAULT) const;
 
   // Given a UTF8 input, encodes it into a sequence of ids.
   virtual util::Status Encode(absl::string_view input,
-                              std::vector<int> *ids) const;
+                              std::vector<int> *ids,
+                              normalizer::AddDummyPrefix add_dummy_prefix
+                              = normalizer::AddDummyPrefix::DEFAULT) const;
 
   // Given a sequence of pieces, decodes it into a detokenized output.
   virtual util::Status Decode(const std::vector<std::string> &pieces,
@@ -304,7 +313,9 @@ class SentencePieceProcessor {
   //
   // Given a UTF8 input, encodes it into SentencePieceText.
   virtual util::Status Encode(absl::string_view input,
-                              SentencePieceText *spt) const;
+                              SentencePieceText *spt,
+                              normalizer::AddDummyPrefix add_dummy_prefix
+                              = normalizer::AddDummyPrefix::DEFAULT) const;
 
   // Same as above, but returns NBestSentencePieceText.
   virtual util::Status NBestEncode(absl::string_view input, int nbest_size,
